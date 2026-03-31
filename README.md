@@ -1,43 +1,24 @@
-# How Claude Code's Entire Source Code Got Leaked via a Sourcemap in npm
+# Claude Code's Entire Source Code Got Leaked via a Sourcemap in npm, Let's Talk About It
 
-<!-- ![Hero Banner](images/hero.png) -->
+> **PS:** I've also published this [breakdown on my blog](https://kuber.studio/blog/AI/Claude-Code's-Entire-Source-Code-Got-Leaked-via-a-Sourcemap-in-npm,-Let's-Talk-About-it) with a better reading experience and UX :)
 
-On March 31st, 2026, X user [Chaofan Shou (@Fried_rice)](https://x.com/AChaoFanShou) discovered something that Anthropic probably didn't want the world to see: the **entire source code** of Claude Code, Anthropic's official AI coding CLI, was sitting in plain sight on the npm registry via a sourcemap file bundled into the published package.
+> There's also a non-zero chance this repo might be taken down, so if you want to play around with it later, or archive it yourself, feel free to fork it & bookmark the external blog link !
 
-This repository is a backup of that leaked source, and this README is a full breakdown of what's in it, how the leak happened, and the things we now know that were never meant to be public.
+Earlier today (March 31st, 2026) - Chaofan Shou on X discovered something that Anthropic probably didn't want the world to see: the **entire source code** of Claude Code, Anthropic's official AI coding CLI, was sitting in plain sight on the npm registry via a sourcemap file bundled into the published package.
+
+[![The tweet announcing the leak](https://raw.githubusercontent.com/kuberwastaken/claude-code/main/public/leak-tweet.png)](https://raw.githubusercontent.com/kuberwastaken/claude-code/main/public/leak-tweet.png)
+
+This repository is a backup of that leaked source, and this README is a full breakdown of what's in it, how the leak happened and most importantly, the things we now know that were never meant to be public.
 
 Let's get into it.
 
-## Table of Contents
-
-- [How Did This Even Happen?](#how-did-this-even-happen)
-- [What Even Is Claude Code Under The Hood?](#what-even-is-claude-code-under-the-hood)
-- [BUDDY — A Tamagotchi Inside Your Terminal](#buddy--a-tamagotchi-inside-your-terminal)
-- [KAIROS — "Always-On Claude"](#kairos--always-on-claude)
-- [ULTRAPLAN — 30-Minute Remote Planning Sessions](#ultraplan--30-minute-remote-planning-sessions)
-- [The "Dream" System — Claude Literally Dreams](#the-dream-system--claude-literally-dreams)
-- [Undercover Mode — "Do Not Blow Your Cover"](#undercover-mode--do-not-blow-your-cover)
-- [Multi-Agent Orchestration — "Coordinator Mode"](#multi-agent-orchestration--coordinator-mode)
-- [Fast Mode is Internally Called "Penguin Mode"](#fast-mode-is-internally-called-penguin-mode)
-- [The System Prompt Architecture](#the-system-prompt-architecture)
-- [The Full Tool Registry — 40+ Tools](#the-full-tool-registry--40-tools)
-- [The Permission and Security System](#the-permission-and-security-system)
-- [Hidden Beta Headers and Unreleased API Features](#hidden-beta-headers-and-unreleased-api-features)
-- [Feature Gating — Internal vs. External Builds](#feature-gating--internal-vs-external-builds)
-- [Other Notable Findings](#other-notable-findings)
-- [Final Thoughts](#final-thoughts)
-
----
-
 ## How Did This Even Happen?
-
-<!-- ![npm sourcemap leak diagram](images/npm-sourcemap.png) -->
 
 This is the part that honestly made me go "...really?"
 
-When you publish a JavaScript/TypeScript package to npm, the build toolchain often generates **source map files** (`.map` files). These files map the minified/bundled production code back to the original source. When something crashes in production, the stack trace can point you to the *actual* line of code in the *original* file instead of some unintelligible line 1, column 48293 of a minified blob.
+When you publish a JavaScript/TypeScript package to npm, the build toolchain often generates **source map files** (`.map` files). These files are a bridge between the minified/bundled production code and the original source, they exist so that when something crashes in production the stack trace can point you to the *actual* line of code in the *original* file, not some unintelligible line 1, column 48293 of a minified blob.
 
-Here's the thing: **source maps contain the original source code**. The actual, literal, raw source code, embedded as strings inside a JSON file.
+But the fun part is **source maps contain the original source code**. The actual, literal, raw source code, embedded as strings inside a JSON file.
 
 The structure of a `.map` file looks something like this:
 
@@ -50,46 +31,38 @@ The structure of a `.map` file looks something like this:
 }
 ```
 
-That `sourcesContent` array? That's everything. Every file. Every comment. Every internal constant. Every system prompt. All of it, sitting right there in a JSON file that npm happily serves to anyone who runs `npm pack` or even just browses the package contents.
+That `sourcesContent` array? That's everything.
+Every file. Every comment. Every internal constant. Every system prompt. All of it, sitting right there in a JSON file that npm happily serves to anyone who runs `npm pack` or even just browses the package contents.
 
-This is not a novel attack vector. It's happened before and it'll happen again. The mistake is almost always the same: someone forgets to add `*.map` to their `.npmignore` or doesn't configure their bundler to skip source map generation for production builds. With Bun's bundler (which Claude Code uses), source maps are generated by default unless you explicitly turn them off.
+This is not a novel attack vector. It's happened before and honestly it'll happen again.
 
-**Chaofan Shou** found it, shared it, and here we are.
+The mistake is almost always the same: someone forgets to add `*.map` to their `.npmignore` or doesn't configure their bundler to skip source map generation for production builds. With Bun's bundler (which Claude Code uses), source maps are generated by default unless you explicitly turn them off.
 
-The irony? Deep in this codebase, there's an entire system called ["Undercover Mode"](#undercover-mode--do-not-blow-your-cover) specifically designed to prevent Anthropic's internal information from leaking. They built a whole subsystem to stop their AI from accidentally revealing internal codenames in git commits... and then shipped the entire source in a `.map` file.
+[![Claude Code source files exposed in npm package](https://raw.githubusercontent.com/kuberwastaken/claude-code/main/public/claude-files.png)](https://raw.githubusercontent.com/kuberwastaken/claude-code/main/public/claude-files.png)
 
-<!-- ![Ironic Palpatine meme](images/ironic.png) -->
+The funniest part is, there's an entire system called ["Undercover Mode"](#undercover-mode--do-not-blow-your-cover) specifically designed to prevent Anthropic's internal information from leaking.
+
+They built a whole subsystem to stop their AI from accidentally revealing internal codenames in git commits... and then shipped the entire source in a `.map` file, likely by Claude.
 
 ---
 
-## What Even Is Claude Code Under The Hood?
+## What's Claude Under The Hood?
 
-If you've been living under a rock, Claude Code is Anthropic's official CLI tool for coding with Claude. You type natural language, it reads your codebase, writes code, runs commands, edits files, and handles complex multi-step engineering tasks.
+If you've been living under a rock, Claude Code is Anthropic's official CLI tool for coding with Claude and the most popular AI coding agent.
 
 From the outside, it looks like a polished but relatively simple CLI.
 
-From the inside? It's a **785KB [`main.tsx`](https://github.com/kuberwastaken/claude-code/blob/main/main.tsx)** entry point, a custom React terminal renderer, 40+ tools, a multi-agent orchestration system, a background memory consolidation engine called "dream," a Tamagotchi-style companion pet system, voice input, and an upstream proxy that uses `prctl()` to prevent memory dumps.
+From the inside, It's a **785KB [`main.tsx`](https://github.com/kuberwastaken/claude-code/blob/main/main.tsx)** entry point, a custom React terminal renderer, 40+ tools, a multi-agent orchestration system, a background memory consolidation engine called "dream," and much more
 
-**Built with:**
-- **Bun** as the JavaScript runtime (not Node.js)
-- **TypeScript** throughout
-- **React 19 + Ink.js** for the terminal UI (yes, the terminal UI is React components)
-- **Zustand** for state management (100+ fields in the [`AppStateStore`](https://github.com/kuberwastaken/claude-code/blob/main/state/AppStateStore.ts))
-- **Anthropic SDK** for API communication
-
-The whole thing is compiled with Bun's bundler using **compile-time feature flags** via `feature()` from `bun:bundle`. These aren't runtime checks. The bundler **constant-folds** them and **dead-code-eliminates** entire feature branches from external builds. A lot of what we're about to discuss was *supposed* to be invisible.
-
-But source maps don't care about dead code elimination. They contain the **original** source.
+Enough yapping, here's some parts about the source code that are genuinely cool that I found after an afternoon deep dive:
 
 ---
 
-## BUDDY — A Tamagotchi Inside Your Terminal
-
-<!-- ![Buddy System](images/buddy.png) -->
+## BUDDY - A Tamagotchi Inside Your Terminal
 
 I am not making this up.
 
-Claude Code has a full **Tamagotchi-style companion pet system** called "Buddy." We're talking a **deterministic gacha system** with species rarity, shiny variants, procedurally generated stats, and a soul description written by Claude on first hatch.
+Claude Code has a full **Tamagotchi-style companion pet system** called "Buddy." A **deterministic gacha system** with species rarity, shiny variants, procedurally generated stats, and a soul description written by Claude on first hatch like OpenClaw.
 
 The entire thing lives in [`buddy/`](https://github.com/kuberwastaken/claude-code/tree/main/buddy) and is gated behind the `BUDDY` compile-time feature flag.
 
@@ -98,7 +71,7 @@ The entire thing lives in [`buddy/`](https://github.com/kuberwastaken/claude-cod
 Your buddy's species is determined by a **Mulberry32 PRNG**, a fast 32-bit pseudo-random number generator seeded from your `userId` hash with the salt `'friend-2026-401'`:
 
 ```typescript
-// Mulberry32 PRNG — deterministic, reproducible per-user
+// Mulberry32 PRNG - deterministic, reproducible per-user
 function mulberry32(seed: number): () => number {
   return function() {
     seed |= 0; seed = seed + 0x6D2B79F5 | 0;
@@ -109,11 +82,11 @@ function mulberry32(seed: number): () => number {
 }
 ```
 
-Same user always gets the same buddy. No re-rolling.
+Same user always gets the same buddy.
 
 ### 18 Species (Obfuscated in Code)
 
-The species names are hidden via `String.fromCharCode()` arrays. Anthropic clearly didn't want these showing up in string searches. Decoded, the full species list is:
+The species names are hidden via `String.fromCharCode()` arrays - Anthropic clearly didn't want these showing up in string searches. Decoded, the full species list is:
 
 | Rarity | Species |
 |--------|---------|
@@ -123,50 +96,46 @@ The species names are hidden via `String.fromCharCode()` arrays. Anthropic clear
 | **Epic** (4%) | Stormwyrm, Voidcat, Aetherling |
 | **Legendary** (1%) | Cosmoshale, Nebulynx |
 
-On top of that, there's a **1% shiny chance**, completely independent of rarity. So a Shiny Legendary Nebulynx has a **0.01%** chance of being rolled. Good luck with that.
+On top of that, there's a **1% shiny chance** completely independent of rarity. So a Shiny Legendary Nebulynx has a **0.01%** chance of being rolled. Dang.
 
 ### Stats, Eyes, Hats, and Soul
 
 Each buddy gets procedurally generated:
 - **5 stats**: `DEBUGGING`, `PATIENCE`, `CHAOS`, `WISDOM`, `SNARK` (0-100 each)
 - **6 possible eye styles** and **8 hat options** (some gated by rarity)
-- **A "soul"**, a personality description generated by Claude on first hatch, written in character
+- **A "soul"** as mentioned, the personality generated by Claude on first hatch, written in character
 
 The sprites are rendered as **5-line-tall, 12-character-wide ASCII art** with multiple animation frames. There are idle animations, reaction animations, and they sit next to your input prompt.
 
-### The Timeline
+### The Lore
 
-The code references April 1-7, 2026 as a **teaser window** (think: Easter egg), with a full launch gated for May 2026. The companion has a system prompt that tells Claude:
+The code references April 1-7, 2026 as a **teaser window** (so probably for easter?), with a full launch gated for May 2026. The companion has a system prompt that tells Claude:
 
 ```
 A small {species} named {name} sits beside the user's input box and 
-occasionally comments in a speech bubble. You're not {name} — it's a 
+occasionally comments in a speech bubble. You're not {name} - it's a 
 separate watcher.
 ```
 
-So it's not purely cosmetic. The buddy has its own personality and can respond when addressed by name. This is the most "a human engineer had fun with this" feature in the entire codebase and I really hope they ship it.
+So it's not just cosmetic - the buddy has its own personality and can respond when addressed by name. I really do hope they ship it.
 
 ---
 
-## KAIROS — "Always-On Claude"
+## KAIROS - "Always-On Claude"
 
-<!-- ![KAIROS Mode](images/kairos.png) -->
+Inside [`assistant/`](https://github.com/kuberwastaken/claude-code/tree/main/assistant), there's an entire mode called **KAIROS** i.e. a persistent, always-running Claude assistant that doesn't wait for you to type. It watches, logs, and **proactively** acts on things it notices.
 
-This is the big one.
-
-Deep in [`assistant/`](https://github.com/kuberwastaken/claude-code/tree/main/assistant), there's an entire mode called **KAIROS**, a persistent, always-running Claude assistant that doesn't wait for you to type. It watches, logs, and **proactively** acts on things it notices.
-
-This is gated behind the `PROACTIVE` / `KAIROS` compile-time feature flags and is completely absent from external builds. Here's what the code reveals:
+This is gated behind the `PROACTIVE` / `KAIROS` compile-time feature flags and is completely absent from external builds.
 
 ### How It Works
 
-KAIROS maintains **append-only daily log files**. It writes observations, decisions, and actions throughout the day. On a regular interval, it receives `<tick>` prompts that let it decide whether to act proactively or stay quiet.
+KAIROS maintains **append-only daily log files** - it writes observations, decisions, and actions throughout the day. On a regular interval, it receives `<tick>` prompts that let it decide whether to act proactively or stay quiet.
 
-The system has a **15-second blocking budget**. Any proactive action that would block the user's workflow for more than 15 seconds gets deferred. Claude trying to be helpful without being annoying.
+The system has a **15-second blocking budget**, any proactive action that would block the user's workflow for more than 15 seconds gets deferred. This is Claude trying to be helpful without being annoying.
 
 ### Brief Mode
 
-When KAIROS is active, there's a special output mode called **Brief**. Extremely concise responses designed for a persistent assistant that shouldn't flood your terminal. A chatty friend vs. a professional assistant who only speaks when they have something valuable to say.
+When KAIROS is active, there's a special output mode called **Brief**, extremely concise responses designed for a persistent assistant that shouldn't flood your terminal. Think of it as the difference between a chatty friend and a professional assistant who only speaks when they have something valuable to say.
 
 ### Exclusive Tools
 
@@ -178,44 +147,31 @@ KAIROS gets tools that regular Claude Code doesn't have:
 | **PushNotification** | Send push notifications to the user's device |
 | **SubscribePR** | Subscribe to and monitor pull request activity |
 
-These tools only exist when KAIROS mode is active. The PR monitoring in particular suggests this is designed for the "leave Claude running and it handles your code review queue" workflow.
+ ---
 
-### Nightly Dreaming
-
-KAIROS ties directly into the [Dream System](#the-dream-system--claude-literally-dreams). At the end of the day, it consolidates what it learned into durable memory. The daily logs become input for the dream's "Gather Recent Signal" phase.
-
-Conceptually, this is **the most ambitious feature in the codebase**. Always-watching AI that proactively helps with your project. Whether that's exciting or terrifying probably depends on your relationship with your terminal.
-
----
-
-## ULTRAPLAN — 30-Minute Remote Planning Sessions
-
-<!-- ![ULTRAPLAN](images/ultraplan.png) -->
+## ULTRAPLAN - 30-Minute Remote Planning Sessions
 
 Here's one that's wild from an infrastructure perspective.
 
 **ULTRAPLAN** is a mode where Claude Code offloads a complex planning task to a **remote Cloud Container Runtime (CCR) session** running **Opus 4.6**, gives it up to **30 minutes** to think, and lets you approve the result from your browser.
 
-The flow:
+The basic flow:
+
 1. Claude Code identifies a task that needs deep planning
 2. It spins up a remote CCR session via the `tengu_ultraplan_model` config
-3. Your terminal shows a polling state, checking every **3 seconds** for the result
+3. Your terminal shows a polling state - checking every **3 seconds** for the result
 4. Meanwhile, a browser-based UI lets you watch the planning happen and approve/reject it
 5. When approved, there's a special sentinel value `__ULTRAPLAN_TELEPORT_LOCAL__` that "teleports" the result back to your local terminal
 
-Think of it as Claude saying "this is too complex for a quick answer, let me go think about this in a room with more compute and come back to you."
-
-The 30-minute budget and Opus 4.6 model assignment tells you this is meant for hard architectural decisions, not "rename this variable." The polling mechanism and browser approval flow make it feel more like a CI/CD pipeline than a chat interaction.
-
 ---
 
-## The "Dream" System — Claude Literally Dreams
+## The "Dream" System - Claude Literally Dreams
 
-<!-- ![Dream system concept](images/dream.png) -->
+Okay this is genuinely one of the coolest things in here.
 
-Okay this is one of the coolest things in here.
+Claude Code has a system called **autoDream** ([`services/autoDream/`](https://github.com/kuberwastaken/claude-code/tree/main/services/autoDream)) - a background memory consolidation engine that runs as a **forked subagent**. The naming is very intentional. It's Claude... dreaming.
 
-Claude Code has a system called **autoDream** ([`services/autoDream/`](https://github.com/kuberwastaken/claude-code/tree/main/services/autoDream)), a background memory consolidation engine that runs as a **forked subagent**. The naming is very intentional. Claude, dreaming.
+This is extremely funny because [I had the same idea for LITMUS last week - OpenClaw subagents creatively having leisure time to find fun new papers](https://github.com/Kuberwastaken/litmus)
 
 ### The Three-Gate Trigger
 
@@ -231,36 +187,33 @@ All three must pass. This prevents both over-dreaming and under-dreaming.
 
 When it runs, the dream follows four strict phases from the prompt in [`consolidationPrompt.ts`](https://github.com/kuberwastaken/claude-code/blob/main/services/autoDream/consolidationPrompt.ts):
 
-**Phase 1 — Orient**: `ls` the memory directory, read `MEMORY.md`, skim existing topic files to improve rather than duplicate.
+**Phase 1 - Orient**: `ls` the memory directory, read `MEMORY.md`, skim existing topic files to improve.
 
-**Phase 2 — Gather Recent Signal**: Find new information worth persisting. Sources in priority: daily logs → drifted memories → transcript search.
+**Phase 2 - Gather Recent Signal**: Find new information worth persisting. Sources in priority: daily logs → drifted memories → transcript search.
 
-**Phase 3 — Consolidate**: Write or update memory files. Convert relative dates to absolute. Delete contradicted facts.
+**Phase 3 - Consolidate**: Write or update memory files. Convert relative dates to absolute. Delete contradicted facts.
 
-**Phase 4 — Prune and Index**: Keep `MEMORY.md` under 200 lines AND ~25KB. Remove stale pointers. Resolve contradictions.
+**Phase 4 - Prune and Index**: Keep `MEMORY.md` under 200 lines AND ~25KB. Remove stale pointers. Resolve contradictions.
 
 The prompt literally says:
 
-> *"You are performing a dream — a reflective pass over your memory files. Synthesize what you've learned recently into durable, well-organized memories so that future sessions can orient quickly."*
+> *"You are performing a dream - a reflective pass over your memory files. Synthesize what you've learned recently into durable, well-organized memories so that future sessions can orient quickly."*
 
-The dream subagent gets **read-only bash**. It can look at your project but not modify anything. Purely a memory consolidation pass.
-
-This is gated behind `tengu_onyx_plover`. If you've ever noticed Claude Code seeming to "remember" things across sessions better than you'd expect, now you know why.
+The dream subagent gets **read-only bash** - it can look at your project but not modify anything. It's purely a memory consolidation pass.
 
 ---
 
-## Undercover Mode — "Do Not Blow Your Cover"
+## Undercover Mode - "Do Not Blow Your Cover"
 
-<!-- ![Undercover mode](images/undercover.png) -->
 
-This one is wild from a corporate strategy perspective.
+This one is fascinating from a corporate strategy perspective.
 
 Anthropic employees (identified by `USER_TYPE === 'ant'`) use Claude Code on public/open-source repositories. **Undercover Mode** ([`utils/undercover.ts`](https://github.com/kuberwastaken/claude-code/blob/main/utils/undercover.ts)) prevents the AI from accidentally revealing internal information in commits and PRs.
 
 When active, it injects this into the system prompt:
 
 ```
-## UNDERCOVER MODE — CRITICAL
+## UNDERCOVER MODE - CRITICAL
 
 You are operating UNDERCOVER in a PUBLIC/OPEN-SOURCE repository. Your commit
 messages, PR titles, and PR bodies MUST NOT contain ANY Anthropic-internal
@@ -278,20 +231,21 @@ NEVER include in commit messages or PR descriptions:
 The activation logic:
 - `CLAUDE_CODE_UNDERCOVER=1` forces it ON (even in internal repos)
 - Otherwise it's **automatic**: active UNLESS the repo remote matches an internal allowlist
-- There is **NO force-OFF**. *"if we're not confident we're in an internal repo, we stay undercover."*
+- There is **NO force-OFF** - *"if we're not confident we're in an internal repo, we stay undercover."*
 
 So this confirms:
-1. **Anthropic employees actively use Claude Code to contribute to open-source**, and the AI is told to hide that it's an AI
-2. **Internal model codenames are animal names**: Capybara, Tengu, etc.
-3. **"Tengu"** appears hundreds of times as a prefix for feature flags and analytics events, almost certainly **Claude Code's internal project codename**
+1. **Anthropic employees actively use Claude Code to contribute to open-source** - and the AI is told to hide that it's an AI
+2. **Internal model codenames are animal names** - Capybara, Tengu, etc.
+3. **"Tengu"** appears hundreds of times as a prefix for feature flags and analytics events - it's almost certainly **Claude Code's internal project codename**
 
 All of this is dead-code-eliminated from external builds. But source maps don't care about dead code elimination.
 
+Makes me wonder how much are they internally causing havoc to open source repos
+
 ---
 
-## Multi-Agent Orchestration — "Coordinator Mode"
+## Multi-Agent Orchestration - "Coordinator Mode"
 
-<!-- ![Coordinator mode diagram](images/coordinator.png) -->
 
 Claude Code has a full **multi-agent orchestration system** in [`coordinator/`](https://github.com/kuberwastaken/claude-code/tree/main/coordinator), activated via `CLAUDE_CODE_COORDINATOR_MODE=1`.
 
@@ -306,19 +260,17 @@ When enabled, Claude Code transforms from a single agent into a **coordinator** 
 
 The prompt **explicitly** teaches parallelism:
 
-> *"Parallelism is your superpower. Workers are async. Launch independent workers concurrently whenever possible — don't serialize work that can run simultaneously."*
+> *"Parallelism is your superpower. Workers are async. Launch independent workers concurrently whenever possible - don't serialize work that can run simultaneously."*
 
 Workers communicate via `<task-notification>` XML messages. There's a shared **scratchpad directory** (gated behind `tengu_scratch`) for cross-worker durable knowledge sharing. And the prompt has this gem banning lazy delegation:
 
-> *Do NOT say "based on your findings" — read the actual findings and specify exactly what to do.*
+> *Do NOT say "based on your findings" - read the actual findings and specify exactly what to do.*
 
 The system also includes **Agent Teams/Swarm** capabilities (`tengu_amber_flint` feature gate) with in-process teammates using `AsyncLocalStorage` for context isolation, process-based teammates using tmux/iTerm2 panes, team memory synchronization, and color assignments for visual distinction.
 
 ---
 
 ## Fast Mode is Internally Called "Penguin Mode"
-
-<!-- ![Penguin mode](images/penguin.png) -->
 
 Yeah, they really called it Penguin Mode. The API endpoint in [`utils/fastMode.ts`](https://github.com/kuberwastaken/claude-code/blob/main/utils/fastMode.ts) is literally:
 
@@ -328,31 +280,21 @@ const endpoint = `${getOauthConfig().BASE_API_URL}/api/claude_code_penguin_mode`
 
 The config key is `penguinModeOrgEnabled`. The kill-switch is `tengu_penguins_off`. The analytics event on failure is `tengu_org_penguin_mode_fetch_failed`. Penguins all the way down.
 
-The pricing (which matches public docs) isn't the interesting part here. The **cooldown system** is. When you hit a rate limit, Claude Code doesn't just throw an error. It:
-
-1. Gracefully falls back to normal speed
-2. Logs `tengu_fast_mode_fallback_triggered`
-3. Starts a cooldown timer
-4. Auto-restores when the cooldown expires
-5. Fires `onCooldownExpired` so the UI updates
-
-There are observable signals (`onCooldownTriggered`, `onCooldownExpired`) that the React UI subscribes to. The whole thing is designed so you never notice the degradation unless you're watching for it.
-
 ---
 
 ## The System Prompt Architecture
 
-The system prompt is built from **modular, cached sections** composed at runtime in [`constants/`](https://github.com/kuberwastaken/claude-code/tree/main/constants).
+The system prompt isn't a single string like most apps have - it's built from **modular, cached sections** composed at runtime in [`constants/`](https://github.com/kuberwastaken/claude-code/tree/main/constants).
 
 The architecture uses a `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` marker that splits the prompt into:
-- **Static sections**: cacheable across organizations (things that don't change per user)
-- **Dynamic sections**: user/session-specific content that breaks cache when changed
+- **Static sections** - cacheable across organizations (things that don't change per user)
+- **Dynamic sections** - user/session-specific content that breaks cache when changed
 
 There's a function called `DANGEROUS_uncachedSystemPromptSection()` for volatile sections you explicitly want to break cache. The naming convention alone tells you someone learned this lesson the hard way.
 
 ### The Cyber Risk Instruction
 
-Worth calling out: the `CYBER_RISK_INSTRUCTION` in [`constants/cyberRiskInstruction.ts`](https://github.com/kuberwastaken/claude-code/blob/main/constants/cyberRiskInstruction.ts), which has a massive warning header:
+One particularly interesting section is the `CYBER_RISK_INSTRUCTION` in [`constants/cyberRiskInstruction.ts`](https://github.com/kuberwastaken/claude-code/blob/main/constants/cyberRiskInstruction.ts), which has a massive warning header:
 
 ```
 IMPORTANT: DO NOT MODIFY THIS INSTRUCTION WITHOUT SAFEGUARDS TEAM REVIEW
@@ -363,9 +305,9 @@ So now we know exactly who at Anthropic owns the security boundary decisions and
 
 ---
 
-## The Full Tool Registry — 40+ Tools
+## The Full Tool Registry - 40+ Tools
 
-Claude Code's tool system lives in [`tools/`](https://github.com/kuberwastaken/claude-code/tree/main/tools). Full registry, permission system, and dispatch mechanism. Here's the complete list:
+Claude Code's tool system lives in [`tools/`](https://github.com/kuberwastaken/claude-code/tree/main/tools).Here's the complete list:
 
 | Tool | What It Does |
 |------|-------------|
@@ -404,17 +346,17 @@ Tools are registered via `getAllBaseTools()` and filtered by feature gates, user
 
 ## The Permission and Security System
 
-Claude Code's permission system in [`tools/permissions/`](https://github.com/kuberwastaken/claude-code/tree/main/tools/permissions) goes way beyond "allow/deny":
+Claude Code's permission system in [`tools/permissions/`](https://github.com/kuberwastaken/claude-code/tree/main/tools/permissions) is far more sophisticated than "allow/deny":
 
-**Permission Modes**: `default` (interactive prompts), `auto` (ML-based auto-approval via transcript classifier), `bypass` (skip checks), `yolo` (deny all, ironically named)
+**Permission Modes**: `default` (interactive prompts), `auto` (ML-based auto-approval via transcript classifier), `bypass` (skip checks), `yolo` (deny all - ironically named)
 
-**Risk Classification**: Every tool action is classified as **LOW**, **MEDIUM**, or **HIGH** risk. There's a **YOLO classifier**, a fast ML-based permission decision system that decides automatically.
+**Risk Classification**: Every tool action is classified as **LOW**, **MEDIUM**, or **HIGH** risk. There's a **YOLO classifier** - a fast ML-based permission decision system that decides automatically.
 
 **Protected Files**: `.gitconfig`, `.bashrc`, `.zshrc`, `.mcp.json`, `.claude.json` and others are guarded from automatic editing.
 
-**Path Traversal Prevention**: URL-encoded traversals, Unicode normalization attacks, backslash injection, case-insensitive path manipulation. All handled.
+**Path Traversal Prevention**: URL-encoded traversals, Unicode normalization attacks, backslash injection, case-insensitive path manipulation - all handled.
 
-**Permission Explainer**: A separate LLM call explains tool risks to the user before they approve. When Claude says "this command will modify your git config," that explanation is itself generated by Claude.
+**Permission Explainer**: A separate LLM call explains tool risks to the user before they approve. When Claude says "this command will modify your git config" - that explanation is itself generated by Claude.
 
 ---
 
@@ -440,13 +382,13 @@ The [`constants/betas.ts`](https://github.com/kuberwastaken/claude-code/blob/mai
 'summarize-connector-text-2026-03-13'  // Connector text summarization
 ```
 
-`redact-thinking`, `afk-mode`, and `advisor-tool` stand out. These suggest API-level features that haven't been publicly announced.
+`redact-thinking`, `afk-mode`, and `advisor-tool` are also not released.
 
 ---
 
-## Feature Gating — Internal vs. External Builds
+## Feature Gating - Internal vs. External Builds
 
-The feature gating architecture is one of the more interesting parts of the codebase.
+This is one of the most architecturally interesting parts of the codebase.
 
 Claude Code uses **compile-time feature flags** via Bun's `feature()` function from `bun:bundle`. The bundler **constant-folds** these and **dead-code-eliminates** the gated branches from external builds. The complete list of known flags:
 
@@ -467,7 +409,7 @@ Claude Code uses **compile-time feature flags** via Bun's `feature()` function f
 
 Additionally, `USER_TYPE === 'ant'` gates Anthropic-internal features: staging API access (`claude-ai.staging.ant.dev`), internal beta headers, Undercover mode, the `/security-review` command, `ConfigTool`, `TungstenTool`, and debug prompt dumping to `~/.config/claude/dump-prompts/`.
 
-**GrowthBook** handles runtime feature gating with aggressively cached values. Feature flags prefixed with `tengu_` control everything from fast mode to memory consolidation. Many checks use `getFeatureValue_CACHED_MAY_BE_STALE()` to avoid blocking the main loop. Stale data is considered acceptable for feature gates.
+**GrowthBook** handles runtime feature gating with aggressively cached values. Feature flags prefixed with `tengu_` control everything from fast mode to memory consolidation. Many checks use `getFeatureValue_CACHED_MAY_BE_STALE()` to avoid blocking the main loop - stale data is considered acceptable for feature gates.
 
 ---
 
@@ -481,10 +423,10 @@ A JWT-authenticated bridge system in [`bridge/`](https://github.com/kuberwastake
 
 ### Model Codenames in Migrations
 The [`migrations/`](https://github.com/kuberwastaken/claude-code/tree/main/migrations) directory reveals the internal codename history:
-- `migrateFennecToOpus`: **"Fennec"** (the fox) was an Opus codename
-- `migrateSonnet1mToSonnet45`: Sonnet with 1M context became Sonnet 4.5
-- `migrateSonnet45ToSonnet46`: Sonnet 4.5 → Sonnet 4.6
-- `resetProToOpusDefault`: Pro users were reset to Opus at some point
+- `migrateFennecToOpus` - **"Fennec"** (the fox) was an Opus codename
+- `migrateSonnet1mToSonnet45` - Sonnet with 1M context became Sonnet 4.5
+- `migrateSonnet45ToSonnet46` - Sonnet 4.5 → Sonnet 4.6
+- `resetProToOpusDefault` - Pro users were reset to Opus at some point
 
 ### Attribution Header
 Every API request includes:
@@ -492,34 +434,30 @@ Every API request includes:
 x-anthropic-billing-header: cc_version={VERSION}.{FINGERPRINT}; 
   cc_entrypoint={ENTRYPOINT}; cch={ATTESTATION_PLACEHOLDER}; cc_workload={WORKLOAD};
 ```
-The `NATIVE_CLIENT_ATTESTATION` feature lets Bun's HTTP stack overwrite the `cch=00000` placeholder with a computed hash, a client authenticity check so Anthropic can verify the request came from a real Claude Code install.
+The `NATIVE_CLIENT_ATTESTATION` feature lets Bun's HTTP stack overwrite the `cch=00000` placeholder with a computed hash - essentially a client authenticity check so Anthropic can verify the request came from a real Claude Code install.
 
-### Computer Use — "Chicago"
+### Computer Use - "Chicago"
 Claude Code includes a full Computer Use implementation, internally codenamed **"Chicago"**, built on `@ant/computer-use-mcp`. It provides screenshot capture, click/keyboard input, and coordinate transformation. Gated to Max/Pro subscriptions (with an ant bypass for internal users).
 
 ### Pricing
-For anyone wondering, all pricing in [`utils/modelCost.ts`](https://github.com/kuberwastaken/claude-code/blob/main/utils/modelCost.ts) matches [Anthropic's public pricing](https://docs.anthropic.com/en/docs/about-claude/models) exactly. Nothing newsworthy there.
+For anyone wondering - all pricing in [`utils/modelCost.ts`](https://github.com/kuberwastaken/claude-code/blob/main/utils/modelCost.ts) matches [Anthropic's public pricing](https://docs.anthropic.com/en/docs/about-claude/models) exactly. Nothing newsworthy there.
 
 ---
 
 ## Final Thoughts
 
-Without exaggeration, this is one of the deepest looks anyone's gotten at how a production AI coding assistant actually works. Through the actual source code, not documentation or marketing material.
+This is, without exaggeration, one of the most comprehensive looks we've ever gotten at how *the* production AI coding assistant works under the hood. Through the actual source code.
 
 A few things stand out:
 
-**The engineering is impressive.** This isn't a weekend project wrapped in a CLI. Multi-agent coordination, the dream system, three-gate trigger architecture, compile-time feature elimination. Deeply considered systems.
+**The engineering is genuinely impressive.** This isn't a weekend project wrapped in a CLI. The multi-agent coordination, the dream system, the three-gate trigger architecture, the compile-time feature elimination - these are deeply considered systems.
 
-**There's a LOT more coming.** KAIROS (always-on Claude), ULTRAPLAN (30-minute remote planning), the Buddy companion, coordinator mode, agent swarms, workflow scripts. The codebase is significantly ahead of the public release. Most of it is feature-gated and invisible in external builds.
+**There's a LOT more coming.** KAIROS (always-on Claude), ULTRAPLAN (30-minute remote planning), the Buddy companion, coordinator mode, agent swarms, workflow scripts - the codebase is significantly ahead of the public release. Most of these are feature-gated and invisible in external builds.
 
-**The internal culture shows.** Animal codenames (Tengu, Fennec, Capybara), playful feature names (Penguin Mode, Dream System), a Tamagotchi pet system with gacha mechanics. Someone at Anthropic is having fun.
+**The internal culture shows.** Animal codenames (Tengu, Fennec, Capybara), playful feature names (Penguin Mode, Dream System), a Tamagotchi pet system with gacha mechanics. Some people at Anthropic is having fun.
 
-**The irony is almost poetic.** They built an entire system, Undercover Mode, specifically to prevent their AI from leaking internal information in public repositories. The prompt literally says "do not blow your cover." And then they shipped the entire source code of that system in a `.map` file.
-
-Security is hard. `.npmignore` is harder, apparently.
+If there's one takeaway this has, it's that security is hard. But `.npmignore` is harder, apparently :P
 
 ---
 
-*Found by [Chaofan Shou (@Fried_rice)](https://x.com/AChaoFanShou) on March 31st, 2026.*
-
-*Writeup by [Kuber Mehta](https://kuber.studio). This writeup is for educational and research purposes.*
+A writeup by [Kuber Mehta](https://kuber.studio/)
