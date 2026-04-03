@@ -12,8 +12,8 @@ This is a **development** checkout of Claude Code — it runs directly with [Bun
 1. Clone the repo and `cd` into it:
 
    ```bash
-   git clone https://github.com/Koki4a08/claude-code.git
-   cd claude-code
+   git clone https://github.com/Koki4a08/codeus.git
+   cd codeus
    ```
 
 2. Install dependencies:
@@ -32,7 +32,7 @@ This is a **development** checkout of Claude Code — it runs directly with [Bun
 
    ```bash
    bun link --global
-   claude-local
+   codeus
    ```
 
 There is no separate production build for day-to-day use: the entrypoint is `entrypoints/cli.tsx`. The shipped product is a different package; here you run the repo directly.
@@ -45,7 +45,7 @@ The key is stored in Claude Code’s **global** config: `~/.claude.json` → `en
 
 ### Save the API key (one-time)
 
-Pick one approach (the binary is named `claude` in `--help`; from source use `bun entrypoints/cli.tsx` or `claude-local`):
+Pick one approach (the binary is named `codeus` in `--help`; from source use `bun entrypoints/cli.tsx` or `codeus`):
 
 ```bash
 # pass the key as an argument
