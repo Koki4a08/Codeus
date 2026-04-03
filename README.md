@@ -1,4 +1,4 @@
-# Claude Code (local source)
+# Codeus (local source)
 
 This is a **development** checkout of Claude Code — it runs directly with [Bun](https://bun.sh), not the official Anthropic npm bundle.
 
