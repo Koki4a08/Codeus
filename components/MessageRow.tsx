@@ -1,8 +1,8 @@
 import { c as _c } from "react/compiler-runtime";
 import * as React from 'react';
-import type { Command } from '../commands.js';
+import type { Command } from '../types/command.js';
 import { Box } from '../ink.js';
-import type { Screen } from '../screens/REPL.js';
+import type { Screen } from '../screens/REPLProps.js';
 import type { Tools } from '../Tool.js';
 import type { RenderableMessage } from '../types/message.js';
 import { getDisplayMessageFromCollapsed, getToolSearchOrReadInfo, getToolUseIdsFromCollapsedGroup, hasAnyToolInProgress } from '../utils/collapseReadSearch.js';

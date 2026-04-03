@@ -30,12 +30,25 @@ export function startCapturingEarlyInput(): void {
   // Only capture in interactive mode: stdin must be a TTY, and we must not
   // be in print mode. Raw mode disables ISIG (terminal Ctrl+C → SIGINT),
   // which would make -p uninterruptible.
+  const skipWin32EarlyInput =
+    process.platform === 'win32' && process.env.CLAUDE_CODE_EARLY_INPUT !== '1'
+  const willCapture = Boolean(
+    process.stdin.isTTY &&
+      !isCapturing &&
+      !process.argv.includes('-p') &&
+      !process.argv.includes('--print') &&
+      !skipWin32EarlyInput,
+  )
+  
   if (
     !process.stdin.isTTY ||
     isCapturing ||
     process.argv.includes('-p') ||
     process.argv.includes('--print')
   ) {
+    return
+  }
+  if (skipWin32EarlyInput) {
     return
   }
 

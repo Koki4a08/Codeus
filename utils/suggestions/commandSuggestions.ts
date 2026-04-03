@@ -1,10 +1,7 @@
 import Fuse from 'fuse.js'
-import {
-  type Command,
-  formatDescriptionWithSource,
-  getCommand,
-  getCommandName,
-} from '../../commands.js'
+import type { Command } from '../../types/command.js'
+import { getCommand, getCommandName } from '../../types/command.js'
+import { formatDescriptionWithSource } from '../formatCommandDescription.js'
 import type { SuggestionItem } from '../../components/PromptInput/PromptInputFooterSuggestions.js'
 import { getSkillUsageScore } from './skillUsageTracking.js'
 

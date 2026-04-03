@@ -9,11 +9,11 @@ import type { QuerySource } from 'src/constants/querySource.js'
 import { logEvent } from 'src/services/analytics/index.js'
 import { getContentText } from 'src/utils/messages.js'
 import {
+  type LocalJSXCommandContext,
   findCommand,
   getCommandName,
-  isBridgeSafeCommand,
-  type LocalJSXCommandContext,
-} from '../../commands.js'
+} from '../../types/command.js'
+import { isBridgeSafeCommand } from '../bridgeSafeCommandPolicy.js'
 import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
 import type { IDESelection } from '../../hooks/useIdeSelection.js'
 import type { SetToolJSXFn, ToolUseContext } from '../../Tool.js'

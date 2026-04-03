@@ -1,5 +1,6 @@
 import { feature } from 'bun:bundle'
 import type { ToolPermissionContext } from '../../Tool.js'
+import { isDebugPermissionModeEnabled } from '../isDebugPermissionModeEnabled.js'
 import { logForDebugging } from '../debug.js'
 import type { PermissionMode } from './PermissionMode.js'
 import {
@@ -30,6 +31,9 @@ function canCycleToAuto(ctx: ToolPermissionContext): boolean {
 
 /**
  * Determines the next permission mode when cycling through modes with Shift+Tab.
+ *
+ * For debug mode users: default → plan → debug → default
+ * (acceptEdits and bypassPermissions are skipped in the debug cycle)
  */
 export function getNextPermissionMode(
   toolPermissionContext: ToolPermissionContext,
@@ -37,6 +41,10 @@ export function getNextPermissionMode(
 ): PermissionMode {
   switch (toolPermissionContext.mode) {
     case 'default':
+      // When debug mode is enabled, skip acceptEdits and go to plan
+      if (feature('DEBUG_MODE')) {
+        return 'plan'
+      }
       // Ants skip acceptEdits and plan — auto mode replaces them
       if (process.env.USER_TYPE === 'ant') {
         if (toolPermissionContext.isBypassPermissionsModeAvailable) {
@@ -53,12 +61,20 @@ export function getNextPermissionMode(
       return 'plan'
 
     case 'plan':
+      // In debug mode: plan → debug
+      if (isDebugPermissionModeEnabled()) {
+        return 'debug'
+      }
       if (toolPermissionContext.isBypassPermissionsModeAvailable) {
         return 'bypassPermissions'
       }
       if (canCycleToAuto(toolPermissionContext)) {
         return 'auto'
       }
+      return 'default'
+
+    case 'debug':
+      // Debug mode → default
       return 'default'
 
     case 'bypassPermissions':
@@ -71,9 +87,15 @@ export function getNextPermissionMode(
       // Not exposed in UI cycle yet, but return default if somehow reached
       return 'default'
 
+    case 'auto':
+      // Auto mode → plan (with debug mode available) or default
+      if (isDebugPermissionModeEnabled()) {
+        return 'debug'
+      }
+      return 'default'
 
     default:
-      // Covers auto (when TRANSCRIPT_CLASSIFIER is enabled) and any future modes — always fall back to default
+      // Covers any future modes — always fall back to default
       return 'default'
   }
 }

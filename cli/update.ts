@@ -239,7 +239,7 @@ export async function update() {
 
       if (result.latestVersion === getAppVersion()) {
         writeToStdout(
-          chalk.green(`Claude Code is up to date (${getAppVersion()})`) + '\n',
+          chalk.green(`Codeus is up to date (${getAppVersion()})`) + '\n',
         )
       } else {
         writeToStdout(
@@ -309,7 +309,7 @@ export async function update() {
   // Check if versions match exactly, including any build metadata (like SHA)
   if (latestVersion === getAppVersion()) {
     writeToStdout(
-      chalk.green(`Claude Code is up to date (${getAppVersion()})`) + '\n',
+      chalk.green(`Codeus is up to date (${getAppVersion()})`) + '\n',
     )
     await gracefulShutdown(0)
   }

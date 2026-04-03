@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { getDefaultAppState } from 'src/state/AppStateStore.js'
 import review from '../commands/review.js'
-import type { Command } from '../commands.js'
+import type { Command } from '../types/command.js'
 import {
   findToolByName,
   getEmptyToolPermissionContext,

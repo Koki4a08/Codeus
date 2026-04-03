@@ -173,7 +173,9 @@ import env from './commands/env/index.js'
 import exit from './commands/exit/index.js'
 import exportCommand from './commands/export/index.js'
 import model from './commands/model/index.js'
+import powerup from './commands/powerup/index.js'
 import tag from './commands/tag/index.js'
+import tags from './commands/tags/index.js'
 import outputStyle from './commands/output-style/index.js'
 import remoteEnv from './commands/remote-env/index.js'
 import upgrade from './commands/upgrade/index.js'
@@ -202,7 +204,6 @@ const usageReport: Command = {
 }
 import oauthRefresh from './commands/oauth-refresh/index.js'
 import debugToolCall from './commands/debug-tool-call/index.js'
-import { getSettingSourceName } from './utils/settings/constants.js'
 import {
   type Command,
   getCommandName,
@@ -291,6 +292,7 @@ const COMMANDS = memoize((): Command[] => [
   outputStyle,
   remoteEnv,
   plugin,
+  powerup,
   pr_comments,
   releaseNotes,
   reloadPlugins,
@@ -303,6 +305,7 @@ const COMMANDS = memoize((): Command[] => [
   statusline,
   stickers,
   tag,
+  tags,
   theme,
   feedback,
   review,
@@ -659,21 +662,7 @@ export const BRIDGE_SAFE_COMMANDS: Set<Command> = new Set(
   ].filter((c): c is Command => c !== null),
 )
 
-/**
- * Whether a slash command is safe to execute when its input arrived over the
- * Remote Control bridge (mobile/web client).
- *
- * PR #19134 blanket-blocked all slash commands from bridge inbound because
- * `/model` from iOS was popping the local Ink picker. This predicate relaxes
- * that with an explicit allowlist: 'prompt' commands (skills) expand to text
- * and are safe by construction; 'local' commands need an explicit opt-in via
- * BRIDGE_SAFE_COMMANDS; 'local-jsx' commands render Ink UI and stay blocked.
- */
-export function isBridgeSafeCommand(cmd: Command): boolean {
-  if (cmd.type === 'local-jsx') return false
-  if (cmd.type === 'prompt') return true
-  return BRIDGE_SAFE_COMMANDS.has(cmd)
-}
+export { isBridgeSafeCommand } from './utils/bridgeSafeCommandPolicy.js'
 
 /**
  * Filter commands to only include those safe for remote mode.
@@ -685,70 +674,6 @@ export function filterCommandsForRemoteMode(commands: Command[]): Command[] {
   return commands.filter(cmd => REMOTE_SAFE_COMMANDS.has(cmd))
 }
 
-export function findCommand(
-  commandName: string,
-  commands: Command[],
-): Command | undefined {
-  return commands.find(
-    _ =>
-      _.name === commandName ||
-      getCommandName(_) === commandName ||
-      _.aliases?.includes(commandName),
-  )
-}
+export { findCommand, hasCommand, getCommand } from './types/command.js'
 
-export function hasCommand(commandName: string, commands: Command[]): boolean {
-  return findCommand(commandName, commands) !== undefined
-}
-
-export function getCommand(commandName: string, commands: Command[]): Command {
-  const command = findCommand(commandName, commands)
-  if (!command) {
-    throw ReferenceError(
-      `Command ${commandName} not found. Available commands: ${commands
-        .map(_ => {
-          const name = getCommandName(_)
-          return _.aliases ? `${name} (aliases: ${_.aliases.join(', ')})` : name
-        })
-        .sort((a, b) => a.localeCompare(b))
-        .join(', ')}`,
-    )
-  }
-
-  return command
-}
-
-/**
- * Formats a command's description with its source annotation for user-facing UI.
- * Use this in typeahead, help screens, and other places where users need to see
- * where a command comes from.
- *
- * For model-facing prompts (like SkillTool), use cmd.description directly.
- */
-export function formatDescriptionWithSource(cmd: Command): string {
-  if (cmd.type !== 'prompt') {
-    return cmd.description
-  }
-
-  if (cmd.kind === 'workflow') {
-    return `${cmd.description} (workflow)`
-  }
-
-  if (cmd.source === 'plugin') {
-    const pluginName = cmd.pluginInfo?.pluginManifest.name
-    if (pluginName) {
-      return `(${pluginName}) ${cmd.description}`
-    }
-    return `${cmd.description} (plugin)`
-  }
-
-  if (cmd.source === 'builtin' || cmd.source === 'mcp') {
-    return cmd.description
-  }
-
-  if (cmd.source === 'bundled') {
-    return `${cmd.description} (bundled)`
-  }
-
-  return `${cmd.description} (${getSettingSourceName(cmd.source)})`
-}
+export { formatDescriptionWithSource } from './utils/formatCommandDescription.js'

@@ -1,9 +1,9 @@
-import type { Command } from '../../commands.js'
+import type { Command } from '../../types/command.js'
 
 const stickers = {
   type: 'local',
   name: 'stickers',
-  description: 'Order Claude Code stickers',
+  description: 'Order Codeus stickers',
   supportsNonInteractive: false,
   load: () => import('./stickers.js'),
 } satisfies Command

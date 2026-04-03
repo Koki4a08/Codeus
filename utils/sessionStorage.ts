@@ -31,7 +31,6 @@ import {
   isSessionPersistenceDisabled,
   switchSession,
 } from '../bootstrap/state.js'
-import { builtInCommandNames } from '../commands.js'
 import { COMMAND_NAME_TAG, TICK_TAG } from '../constants/xml.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 import * as sessionIngress from '../services/api/sessionIngress.js'
@@ -98,6 +97,14 @@ import { validateUuid } from './uuid.js'
 // Cache getAppVersion() at module level to work around bun --define bug in async contexts
 // See: https://github.com/oven-sh/bun/issues/26168
 const VERSION = getAppVersion()
+
+/** Lazy-load commands registry — REPL imports this module at startup. */
+function builtInSlashNameSet(): Set<string> {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { builtInCommandNames } = require('../commands.js') as typeof import('../commands.js')
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return builtInCommandNames()
+}
 
 type Transcript = (
   | UserMessage
@@ -1779,7 +1786,7 @@ export function getFirstMeaningfulUserMessageTextContent<T extends Message>(
 
         // If it's a built-in command, then it's unlikely to provide
         // meaningful context (e.g. `/model sonnet`)
-        if (builtInCommandNames().has(commandName)) {
+        if (builtInSlashNameSet().has(commandName)) {
           continue
         } else {
           // Otherwise, for custom commands, then keep it only if it has
@@ -4871,7 +4878,7 @@ function extractFirstPromptFromChunk(chunk: string): string {
         if (commandNameTag) {
           const name = commandNameTag.replace(/^\//, '')
           const commandArgs = extractTag(result, 'command-args')?.trim() || ''
-          if (builtInCommandNames().has(name) || !commandArgs) {
+          if (builtInSlashNameSet().has(name) || !commandArgs) {
             if (!firstCommandFallback) {
               firstCommandFallback = commandNameTag
             }

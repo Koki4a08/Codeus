@@ -79,7 +79,6 @@ import {
   getDefaultOpusModel,
 } from './model/model.js'
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js'
-import { getSkillToolCommands, getMcpSkillCommands } from '../commands.js'
 import type { Command } from '../types/command.js'
 import uniqBy from 'lodash-es/uniqBy.js'
 import { getProjectRoot } from '../bootstrap/state.js'
@@ -195,6 +194,7 @@ import {
 } from './messages.js'
 import { isHumanTurn } from './messagePredicates.js'
 import { isEnvTruthy, getClaudeConfigHomeDir } from './envUtils.js'
+import { isDebugPermissionModeEnabled } from './isDebugPermissionModeEnabled.js'
 import { feature } from 'bun:bundle'
 /* eslint-disable @typescript-eslint/no-require-imports */
 const BRIEF_TOOL_NAME: string | null =
@@ -262,6 +262,11 @@ export const PLAN_MODE_ATTACHMENT_CONFIG = {
 } as const
 
 export const AUTO_MODE_ATTACHMENT_CONFIG = {
+  TURNS_BETWEEN_ATTACHMENTS: 5,
+  FULL_REMINDER_EVERY_N_ATTACHMENTS: 5,
+} as const
+
+export const DEBUG_MODE_ATTACHMENT_CONFIG = {
   TURNS_BETWEEN_ATTACHMENTS: 5,
   FULL_REMINDER_EVERY_N_ATTACHMENTS: 5,
 } as const
@@ -585,6 +590,9 @@ export type Attachment =
       type: 'auto_mode_exit'
     }
   | {
+      type: 'debug_mode'
+    }
+  | {
       type: 'critical_system_reminder'
       content: string
     }
@@ -880,6 +888,13 @@ export async function getAttachments(
     // replaces it; see src/services/skillSearch/prefetch.ts.
     maybe('plan_mode', () => getPlanModeAttachments(messages, toolUseContext)),
     maybe('plan_mode_exit', () => getPlanModeExitAttachment(toolUseContext)),
+    ...(isDebugPermissionModeEnabled()
+      ? [
+          maybe('debug_mode', () =>
+            getDebugModeAttachments(messages, toolUseContext),
+          ),
+        ]
+      : []),
     ...(feature('TRANSCRIPT_CLASSIFIER')
       ? [
           maybe('auto_mode', () =>
@@ -1270,6 +1285,57 @@ async function getPlanModeExitAttachment(
   // planning. The user_message signal already fires on the request that
   // triggers planning ("plan how to deploy this"), which is the right moment.
   return [{ type: 'plan_mode_exit', planFilePath, planExists }]
+}
+
+function getDebugModeAttachmentTurnCount(messages: Message[]): {
+  turnCount: number
+  foundDebugModeAttachment: boolean
+} {
+  let turnsSinceLastAttachment = 0
+  let foundDebugModeAttachment = false
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+
+    if (
+      message?.type === 'user' &&
+      !message.isMeta &&
+      !hasToolResultContent(message.message.content)
+    ) {
+      turnsSinceLastAttachment++
+    } else if (
+      message?.type === 'attachment' &&
+      message.attachment.type === 'debug_mode'
+    ) {
+      foundDebugModeAttachment = true
+      break
+    }
+  }
+
+  return { turnCount: turnsSinceLastAttachment, foundDebugModeAttachment }
+}
+
+async function getDebugModeAttachments(
+  messages: Message[] | undefined,
+  toolUseContext: ToolUseContext,
+): Promise<Attachment[]> {
+  const appState = toolUseContext.getAppState()
+  if (appState.toolPermissionContext.mode !== 'debug') {
+    return []
+  }
+
+  if (messages && messages.length > 0) {
+    const { turnCount, foundDebugModeAttachment } =
+      getDebugModeAttachmentTurnCount(messages)
+    if (
+      foundDebugModeAttachment &&
+      turnCount < DEBUG_MODE_ATTACHMENT_CONFIG.TURNS_BETWEEN_ATTACHMENTS
+    ) {
+      return []
+    }
+  }
+
+  return [{ type: 'debug_mode' }]
 }
 
 function getAutoModeAttachmentTurnCount(messages: Message[]): {
@@ -2673,6 +2739,9 @@ async function getSkillListingAttachments(
   }
 
   const cwd = getProjectRoot()
+  const { getSkillToolCommands, getMcpSkillCommands } = await import(
+    '../commands.js'
+  )
   const localCommands = await getSkillToolCommands(cwd)
   const mcpSkills = getMcpSkillCommands(
     toolUseContext.getAppState().mcp.commands,

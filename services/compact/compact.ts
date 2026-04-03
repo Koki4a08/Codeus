@@ -62,6 +62,7 @@ import {
   createUserMessage,
   getAssistantMessageText,
   getLastAssistantMessage,
+  mergeAssistantMessages,
   getMessagesAfterCompactBoundary,
   isCompactBoundaryMessage,
   normalizeMessagesForAPI,
@@ -554,6 +555,12 @@ export async function compactConversation(
       postCompactFileAttachments.push(planModeAttachment)
     }
 
+    // Add debug mode instructions if currently in debug mode
+    const debugModeAttachment = await createDebugModeAttachmentIfNeeded(context)
+    if (debugModeAttachment) {
+      postCompactFileAttachments.push(debugModeAttachment)
+    }
+
     // Add skill attachment if skills were invoked in this session
     const skillAttachment = createSkillAttachmentIfNeeded(context.agentId)
     if (skillAttachment) {
@@ -947,6 +954,11 @@ export async function partialCompactConversation(
       postCompactFileAttachments.push(planModeAttachment)
     }
 
+    const debugModeAttachment = await createDebugModeAttachmentIfNeeded(context)
+    if (debugModeAttachment) {
+      postCompactFileAttachments.push(debugModeAttachment)
+    }
+
     const skillAttachment = createSkillAttachmentIfNeeded(context.agentId)
     if (skillAttachment) {
       postCompactFileAttachments.push(skillAttachment)
@@ -1198,16 +1210,41 @@ async function streamCompactSummary({
           // `signal: context.abortController.signal` below.
           overrides: { abortController: context.abortController },
         })
-        const assistantMsg = getLastAssistantMessage(result.messages)
-        const assistantText = assistantMsg
-          ? getAssistantMessageText(assistantMsg)
+        // query/claude yields one AssistantMessage per streamed content block.
+        // With adaptive thinking (inherited for prompt-cache parity), blocks are
+        // [thinking] then [text]; the last chunk alone may lack text if the
+        // model ends on tool_use or the provider orders blocks unexpectedly.
+        // Merge all assistant chunks before reading summary text — same fix as
+        // utils/sideQuestion.ts extractSideQuestionResponse.
+        const assistantMsgs = result.messages.filter(
+          (m): m is AssistantMessage => m.type === 'assistant',
+        )
+        const mergedAssistant =
+          assistantMsgs.length > 0
+            ? assistantMsgs.reduce((a, b) => mergeAssistantMessages(a, b))
+            : undefined
+        const assistantText = mergedAssistant
+          ? getAssistantMessageText(mergedAssistant)
           : null
+        const hasApiErrorAssistant = assistantMsgs.some(m => m.isApiErrorMessage)
         // Guard isApiErrorMessage: query() catches API errors (including
         // APIUserAbortError on ESC) and yields them as synthetic assistant
         // messages. Without this check, an aborted compact "succeeds" with
         // "Request was aborted." as the summary — the text doesn't start with
         // "API Error" so the caller's startsWithApiErrorPrefix guard misses it.
-        if (assistantMsg && assistantText && !assistantMsg.isApiErrorMessage) {
+        if (mergedAssistant && assistantText && !hasApiErrorAssistant) {
+          const lastChunk = assistantMsgs[assistantMsgs.length - 1]!
+          const summaryMessage: AssistantMessage = {
+            ...mergedAssistant,
+            message: {
+              ...mergedAssistant.message,
+              usage: lastChunk.message.usage,
+              stop_reason: lastChunk.message.stop_reason,
+              ...(lastChunk.message.id !== undefined
+                ? { id: lastChunk.message.id }
+                : {}),
+            },
+          }
           // Skip success logging for PTL error text — it's returned so the
           // caller's retry loop catches it, but it's not a successful summary.
           if (!assistantText.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) {
@@ -1226,10 +1263,10 @@ async function streamCompactSummary({
                   : 0,
             })
           }
-          return assistantMsg
+          return summaryMessage
         }
         logForDebugging(
-          `Compact cache sharing: no text in response, falling back. Response: ${jsonStringify(assistantMsg)}`,
+          `Compact cache sharing: no text in response, falling back. Response: ${jsonStringify(mergedAssistant ?? assistantMsgs.at(-1))}`,
           { level: 'warn' },
         )
         logEvent('tengu_compact_cache_sharing_fallback', {
@@ -1257,7 +1294,8 @@ async function streamCompactSummary({
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       // Reset state for retry
       let hasStartedStreaming = false
-      let response: AssistantMessage | undefined
+      let lastAssistantChunk: AssistantMessage | undefined
+      let mergedStreamingAssistant: AssistantMessage | undefined
       context.setResponseLength?.(() => 0)
 
       // Check if tool search is enabled using the main loop's tools list.
@@ -1311,7 +1349,7 @@ async function streamCompactSummary({
             return appState.toolPermissionContext
           },
           model: context.options.mainLoopModel,
-          toolChoice: undefined,
+          toolChoice: { type: 'none' as const },
           isNonInteractiveSession: context.options.isNonInteractiveSession,
           hasAppendSystemPrompt: !!context.options.appendSystemPrompt,
           maxOutputTokensOverride: Math.min(
@@ -1350,14 +1388,27 @@ async function streamCompactSummary({
         }
 
         if (event.type === 'assistant') {
-          response = event
+          lastAssistantChunk = event
+          mergedStreamingAssistant = mergedStreamingAssistant
+            ? mergeAssistantMessages(mergedStreamingAssistant, event)
+            : event
         }
 
         next = await streamIter.next()
       }
 
-      if (response) {
-        return response
+      if (mergedStreamingAssistant && lastAssistantChunk) {
+        return {
+          ...mergedStreamingAssistant,
+          message: {
+            ...mergedStreamingAssistant.message,
+            usage: lastAssistantChunk.message.usage,
+            stop_reason: lastAssistantChunk.message.stop_reason,
+            ...(lastAssistantChunk.message.id !== undefined
+              ? { id: lastAssistantChunk.message.id }
+              : {}),
+          },
+        }
       }
 
       if (attempt < maxAttempts) {
@@ -1530,6 +1581,25 @@ export function createSkillAttachmentIfNeeded(
   return createAttachmentMessage({
     type: 'invoked_skills',
     skills,
+  })
+}
+
+/**
+ * Creates a debug_mode attachment if the user is currently in debug mode.
+ * This ensures the model continues to operate in debug mode after compaction
+ * (otherwise it would lose the debug mode instructions since those are
+ * normally only injected on tool-use turns via getAttachmentMessages).
+ */
+export async function createDebugModeAttachmentIfNeeded(
+  context: ToolUseContext,
+): Promise<AttachmentMessage | null> {
+  const appState = context.getAppState()
+  if (appState.toolPermissionContext.mode !== 'debug') {
+    return null
+  }
+
+  return createAttachmentMessage({
+    type: 'debug_mode',
   })
 }
 

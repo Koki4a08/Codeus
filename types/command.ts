@@ -214,3 +214,35 @@ export function getCommandName(cmd: CommandBase): string {
 export function isCommandEnabled(cmd: CommandBase): boolean {
   return cmd.isEnabled?.() ?? true
 }
+
+export function findCommand(
+  commandName: string,
+  commands: Command[],
+): Command | undefined {
+  return commands.find(
+    _ =>
+      _.name === commandName ||
+      getCommandName(_) === commandName ||
+      _.aliases?.includes(commandName),
+  )
+}
+
+export function hasCommand(commandName: string, commands: Command[]): boolean {
+  return findCommand(commandName, commands) !== undefined
+}
+
+export function getCommand(commandName: string, commands: Command[]): Command {
+  const command = findCommand(commandName, commands)
+  if (!command) {
+    throw new ReferenceError(
+      `Command ${commandName} not found. Available commands: ${commands
+        .map(_ => {
+          const name = getCommandName(_)
+          return _.aliases ? `${name} (aliases: ${_.aliases.join(', ')})` : name
+        })
+        .sort((a, b) => a.localeCompare(b))
+        .join(', ')}`,
+    )
+  }
+  return command
+}

@@ -1,5 +1,5 @@
 import { getIsNonInteractiveSession } from '../../bootstrap/state.js'
-import type { Command } from '../../commands.js'
+import type { Command } from '../../types/command.js'
 
 export const context: Command = {
   name: 'context',

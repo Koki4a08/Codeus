@@ -1,7 +1,7 @@
 import React from 'react';
 import type { StatsStore } from './context/stats.js';
 import type { Root } from './ink.js';
-import type { Props as REPLProps } from './screens/REPL.js';
+import type { Props as REPLProps } from './screens/REPLProps.js';
 import type { AppState } from './state/AppStateStore.js';
 import type { FpsMetrics } from './utils/fpsTracker.js';
 type AppWrapperProps = {

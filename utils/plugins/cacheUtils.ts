@@ -1,6 +1,5 @@
 import { readdir, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { clearCommandsCache } from '../../commands.js'
 import { clearAllOutputStylesCache } from '../../constants/outputStyles.js'
 import { clearAgentDefinitionsCache } from '../../tools/AgentTool/loadAgentsDir.js'
 import { clearPromptCache } from '../../tools/SkillTool/prompt.js'
@@ -43,6 +42,8 @@ export function clearAllPluginCaches(): void {
 
 export function clearAllCaches(): void {
   clearAllPluginCaches()
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { clearCommandsCache } = require('../../commands.js') as typeof import('../../commands.js')
   clearCommandsCache()
   clearAgentDefinitionsCache()
   clearPromptCache()

@@ -1,10 +1,5 @@
 import { memoize } from 'lodash-es'
-import type { Command } from 'src/commands.js'
-import {
-  getCommandName,
-  getSkillToolCommands,
-  getSlashCommandToolSkills,
-} from 'src/commands.js'
+import { getCommandName, type Command } from 'src/types/command.js'
 import { COMMAND_NAME_TAG } from '../../constants/xml.js'
 import { stringWidth } from '../../ink/stringWidth.js'
 import {
@@ -199,6 +194,7 @@ export async function getSkillToolInfo(cwd: string): Promise<{
   totalCommands: number
   includedCommands: number
 }> {
+  const { getSkillToolCommands } = await import('src/commands.js')
   const agentCommands = await getSkillToolCommands(cwd)
 
   return {
@@ -211,7 +207,7 @@ export async function getSkillToolInfo(cwd: string): Promise<{
 // All commands are always included (descriptions may be truncated to fit budget).
 // Used by analyzeContext to count skill tokens.
 export function getLimitedSkillToolCommands(cwd: string): Promise<Command[]> {
-  return getSkillToolCommands(cwd)
+  return import('src/commands.js').then(m => m.getSkillToolCommands(cwd))
 }
 
 export function clearPromptCache(): void {
@@ -223,6 +219,7 @@ export async function getSkillInfo(cwd: string): Promise<{
   includedSkills: number
 }> {
   try {
+    const { getSlashCommandToolSkills } = await import('src/commands.js')
     const skills = await getSlashCommandToolSkills(cwd)
 
     return {

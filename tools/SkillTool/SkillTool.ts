@@ -4,11 +4,10 @@ import uniqBy from 'lodash-es/uniqBy.js'
 import { dirname } from 'path'
 import { getProjectRoot } from 'src/bootstrap/state.js'
 import {
-  builtInCommandNames,
   findCommand,
-  getCommands,
+  type Command,
   type PromptCommand,
-} from 'src/commands.js'
+} from 'src/types/command.js'
 import type {
   Tool,
   ToolCallProgress,
@@ -17,7 +16,6 @@ import type {
   ValidationResult,
 } from 'src/Tool.js'
 import { buildTool, type ToolDef } from 'src/Tool.js'
-import type { Command } from 'src/types/command.js'
 import type {
   AssistantMessage,
   AttachmentMessage,
@@ -79,6 +77,7 @@ import {
  * SkillTool needs this because getCommands() only returns local/bundled skills.
  */
 async function getAllCommands(context: ToolUseContext): Promise<Command[]> {
+  const { getCommands } = await import('src/commands.js')
   // Only include MCP skills (loadedFrom === 'mcp'), not plain MCP prompts.
   // Before this filter, the model could invoke MCP prompts via SkillTool
   // if it guessed the mcp__server__prompt name — they weren't discoverable
@@ -130,6 +129,7 @@ async function executeForkedSkill(
 ): Promise<ToolResult<Output>> {
   const startTime = Date.now()
   const agentId = createAgentId()
+  const { builtInCommandNames } = await import('src/commands.js')
   const isBuiltIn = builtInCommandNames().has(commandName)
   const isOfficialSkill = isOfficialMarketplaceSkill(command)
   const isBundled = command.source === 'bundled'
@@ -651,6 +651,7 @@ export const SkillTool: Tool<InputSchema, Output, Progress> = buildTool({
     const model = processedCommand.model
     const effort = command?.type === 'prompt' ? command.effort : undefined
 
+    const { builtInCommandNames } = await import('src/commands.js')
     const isBuiltIn = builtInCommandNames().has(commandName)
     const isBundled = command?.type === 'prompt' && command.source === 'bundled'
     const isOfficialSkill =

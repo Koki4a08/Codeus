@@ -2845,10 +2845,14 @@ export function getAssistantMessageText(message: Message): string | null {
     return null
   }
 
+  const { content } = message.message
+  if (typeof content === 'string') {
+    return content.trim() || null
+  }
   // For content blocks array, extract and concatenate text blocks
-  if (Array.isArray(message.message.content)) {
+  if (Array.isArray(content)) {
     return (
-      message.message.content
+      content
         .filter(block => block.type === 'text')
         .map(block => (block.type === 'text' ? block.text : ''))
         .join('\n')
@@ -3146,6 +3150,57 @@ function getPlanModeInstructions(attachment: {
     return getPlanModeV2SparseInstructions(attachment)
   }
   return getPlanModeV2Instructions(attachment)
+}
+
+function getDebugModeInstructions(): UserMessage[] {
+  const content = `## Debug Mode is Active
+
+You are in Debug Mode. Your goal is to diagnose bugs systematically and fix them with minimal disruption. Follow these rules:
+
+### Phase 1 — Hypothesize (no file edits yet)
+When the user describes a bug, you MUST:
+1. NOT edit any files immediately
+2. Analyze the relevant code and generate 2-4 hypotheses for the root cause
+3. Present hypotheses as a numbered list, ordered by likelihood
+4. Ask the user which hypothesis to instrument first, or start with #1
+
+Format:
+🐛 Debug Mode — Hypotheses
+──────────────────────────
+1. [Most likely] The state update in useCart() is stale due to missing dependency in useEffect
+2. The API response is cached and returning outdated data
+3. The event handler is being attached multiple times
+
+Which hypothesis should I instrument first, or should I start with #1?
+
+### Phase 2 — Instrument
+Once the user confirms, you MUST:
+1. Add targeted logging statements to verify the chosen hypothesis
+2. Prefix all debug logs with [DEBUG:claude] so logs are easy to find
+3. Add a comment above every inserted log: // [claude-debug] remove after fix
+4. Tell the user exactly what to do: "Now reproduce the bug."
+
+Logging must be:
+- Minimal — only what's needed to verify the hypothesis
+- Non-destructive — no logic changes, only console.log/print
+- Clearly marked for later removal
+
+### Phase 3 — Analyze, Fix, and Clean Up
+After the user reproduces and runtime data is collected:
+1. Analyze the logs to confirm the root cause
+2. Propose a minimal, surgical fix — not a rewrite
+3. SHOW A DIFF before applying any fix — you MUST show a diff and get confirmation before making changes
+4. After the fix works, you MUST remove ALL [claude-debug] instrumentation comments and log statements
+5. Confirm: "Instrumentation removed. Clean diff ready to commit."
+
+### Critical Rules
+- NEVER apply a fix in Debug Mode without first showing a diff and getting explicit user confirmation
+- If the fix doesn't work, loop back to Phase 1 with updated hypotheses
+- Always remove debug instrumentation before completing — it must not persist`
+
+  return wrapMessagesInSystemReminder([
+    createUserMessage({ content, isMeta: true }),
+  ])
 }
 
 // --
@@ -3868,6 +3923,9 @@ You have exited auto mode. The user may now want to interact more directly. You 
       return wrapMessagesInSystemReminder([
         createUserMessage({ content, isMeta: true }),
       ])
+    }
+    case 'debug_mode': {
+      return getDebugModeInstructions()
     }
     case 'critical_system_reminder': {
       return wrapMessagesInSystemReminder([

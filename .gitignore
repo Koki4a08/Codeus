@@ -1,2 +1,4 @@
 node_modules/
 CLAUDE.md
+.claude-debug-server.js
+.claude-debug.log

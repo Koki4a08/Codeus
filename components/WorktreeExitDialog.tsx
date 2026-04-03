@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { CommandResultDisplay } from 'src/commands.js';
+import type { CommandResultDisplay } from 'src/types/command.js';
 import { logEvent } from 'src/services/analytics/index.js';
 import { logForDebugging } from 'src/utils/debug.js';
 import { Box, Text } from '../ink.js';

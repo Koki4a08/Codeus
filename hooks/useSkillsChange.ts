@@ -1,10 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import type { Command } from '../commands.js'
-import {
-  clearCommandMemoizationCaches,
-  clearCommandsCache,
-  getCommands,
-} from '../commands.js'
+import type { Command } from '../types/command.js'
 import { onGrowthBookRefresh } from '../services/analytics/growthbook.js'
 import { logError } from '../utils/log.js'
 import { skillChangeDetector } from '../utils/skills/skillChangeDetector.js'
@@ -28,7 +23,9 @@ export function useSkillsChange(
   const handleChange = useCallback(async () => {
     if (!cwd) return
     try {
-      // Clear all command caches to ensure fresh load
+      const { clearCommandsCache, getCommands } = await import(
+        '../commands.js'
+      )
       clearCommandsCache()
       const commands = await getCommands(cwd)
       onCommandsChange(commands)
@@ -45,6 +42,9 @@ export function useSkillsChange(
   const handleGrowthBookRefresh = useCallback(async () => {
     if (!cwd) return
     try {
+      const { clearCommandMemoizationCaches, getCommands } = await import(
+        '../commands.js'
+      )
       clearCommandMemoizationCaches()
       const commands = await getCommands(cwd)
       onCommandsChange(commands)

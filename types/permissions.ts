@@ -1,13 +1,12 @@
 /**
- * Pure permission type definitions extracted to break import cycles.
+ * Permission type definitions extracted to break import cycles.
  *
- * This file contains only type definitions and constants with no runtime dependencies.
- * Implementation files remain in src/utils/permissions/ but can now import from here
- * to avoid circular dependencies.
+ * Minimal runtime: `EXTERNAL_PERMISSION_MODES` consults debug-mode enablement.
  */
 
 import { feature } from 'bun:bundle'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
+import { isDebugPermissionModeEnabled } from '../utils/isDebugPermissionModeEnabled.js'
 
 // ============================================================================
 // Permission Modes
@@ -19,13 +18,14 @@ export const EXTERNAL_PERMISSION_MODES = [
   'default',
   'dontAsk',
   'plan',
+  ...(isDebugPermissionModeEnabled() ? (['debug'] as const) : ([] as const)),
 ] as const
 
 export type ExternalPermissionMode = (typeof EXTERNAL_PERMISSION_MODES)[number]
 
 // Exhaustive mode union for typechecking. The user-addressable runtime set
 // is INTERNAL_PERMISSION_MODES below.
-export type InternalPermissionMode = ExternalPermissionMode | 'auto' | 'bubble'
+export type InternalPermissionMode = ExternalPermissionMode | 'auto' | 'bubble' | 'debug'
 export type PermissionMode = InternalPermissionMode
 
 // Runtime validation set: modes that are user-addressable (settings.json

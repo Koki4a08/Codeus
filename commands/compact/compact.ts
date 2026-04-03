@@ -21,7 +21,7 @@ import { setLastSummarizedMessageId } from '../../services/SessionMemory/session
 import type { ToolUseContext } from '../../Tool.js'
 import type { LocalCommandCall } from '../../types/command.js'
 import type { Message } from '../../types/message.js'
-import { hasExactErrorMessage } from '../../utils/errors.js'
+import { errorMessage, hasExactErrorMessage } from '../../utils/errors.js'
 import { executePreCompactHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
 import { getMessagesAfterCompactBoundary } from '../../utils/messages.js'
@@ -131,7 +131,7 @@ export const call: LocalCommandCall = async (args, context) => {
       throw new Error(ERROR_MESSAGE_INCOMPLETE_RESPONSE)
     } else {
       logError(error)
-      throw new Error(`Error during compaction: ${error}`)
+      throw new Error(`Error during compaction: ${errorMessage(error)}`)
     }
   }
 }

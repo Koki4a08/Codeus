@@ -2,10 +2,6 @@ import chokidar, { type FSWatcher } from 'chokidar'
 import * as platformPath from 'path'
 import { getAdditionalDirectoriesForClaudeMd } from '../../bootstrap/state.js'
 import {
-  clearCommandMemoizationCaches,
-  clearCommandsCache,
-} from '../../commands.js'
-import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../../services/analytics/index.js'
@@ -94,9 +90,10 @@ export async function initialize(): Promise<void> {
       // Note: we use clearCommandMemoizationCaches (not clearCommandsCache)
       // because clearCommandsCache would call clearSkillCaches which
       // wipes out the dynamic skills we just loaded
-      clearCommandMemoizationCaches()
-      // Notify listeners that skills changed
-      skillsChanged.emit()
+      void import('../../commands.js').then(m => {
+        m.clearCommandMemoizationCaches()
+        skillsChanged.emit()
+      })
     })
   }
 
@@ -272,6 +269,7 @@ function scheduleReload(changedPath: string): void {
       return
     }
     clearSkillCaches()
+    const { clearCommandsCache } = await import('../../commands.js')
     clearCommandsCache()
     resetSentSkillNames()
     skillsChanged.emit()

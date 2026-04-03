@@ -42,7 +42,7 @@ import memoize from 'lodash-es/memoize.js'
 import zipObject from 'lodash-es/zipObject.js'
 import pMap from 'p-map'
 import { getOriginalCwd, getSessionId } from '../../bootstrap/state.js'
-import type { Command } from '../../commands.js'
+import type { Command } from '../../types/command.js'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { PRODUCT_URL } from '../../constants/product.js'
 import type { AppState } from '../../state/AppState.js'
@@ -1811,7 +1811,14 @@ export const fetchToolsForClient = memoizeWithLRU(
             isSearchOrReadCommand() {
               return classifyMcpToolForCollapse(client.name, tool.name)
             },
-            inputJSONSchema: tool.inputSchema as Tool['inputJSONSchema'],
+            // Fallback to a permissive object schema when the MCP server omits
+            // inputSchema. Without this, inputJSONSchema would be `undefined`
+            // (but the key would exist), causing toolToAPISchema to fall through
+            // to zodToJsonSchema(tool.inputSchema) — which can crash if the
+            // base MCPTool's Zod schema was lost during object spread.
+            inputJSONSchema: (tool.inputSchema ?? {
+              type: 'object' as const,
+            }) as Tool['inputJSONSchema'],
             async checkPermissions() {
               return {
                 behavior: 'passthrough' as const,

@@ -2,7 +2,7 @@
  * Cost command - minimal metadata only.
  * Implementation is lazy-loaded from cost.ts to reduce startup time.
  */
-import type { Command } from '../../commands.js'
+import type { Command } from '../../types/command.js'
 import { isClaudeAISubscriber } from '../../utils/auth.js'
 
 const cost = {

@@ -9,6 +9,7 @@ import {
   type PermissionMode,
 } from '../../types/permissions.js'
 import { lazySchema } from '../lazySchema.js'
+import { isDebugPermissionModeEnabled } from '../isDebugPermissionModeEnabled.js'
 
 // Re-export for backwards compatibility
 export {
@@ -55,6 +56,7 @@ type ModeColorKey =
   | 'autoAccept'
   | 'error'
   | 'warning'
+  | 'debug'
 
 type PermissionModeConfig = {
   title: string
@@ -110,6 +112,17 @@ const PERMISSION_MODE_CONFIG: Partial<
           symbol: '⏵⏵',
           color: 'warning' as ModeColorKey,
           external: 'default' as ExternalPermissionMode,
+        },
+      }
+    : {}),
+  ...(isDebugPermissionModeEnabled()
+    ? {
+        debug: {
+          title: 'DEBUG',
+          shortTitle: 'Debug',
+          symbol: '🐛',
+          color: 'warning' as ModeColorKey,
+          external: 'debug',
         },
       }
     : {}),

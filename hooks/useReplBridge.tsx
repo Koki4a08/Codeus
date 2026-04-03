@@ -6,8 +6,8 @@ import { buildBridgeConnectUrl } from '../bridge/bridgeStatusUtil.js';
 import { extractInboundMessageFields } from '../bridge/inboundMessages.js';
 import type { BridgeState, ReplBridgeHandle } from '../bridge/replBridge.js';
 import { setReplBridgeHandle } from '../bridge/replBridgeHandle.js';
-import type { Command } from '../commands.js';
-import { getSlashCommandToolSkills, isBridgeSafeCommand } from '../commands.js';
+import type { Command } from '../types/command.js';
+import { isBridgeSafeCommand } from '../utils/bridgeSafeCommandPolicy.js';
 import { getRemoteSessionUrl } from '../constants/product.js';
 import { useNotifications } from '../context/notifications.js';
 import type { PermissionMode, SDKMessage } from '../entrypoints/agentSdkTypes.js';
@@ -291,6 +291,9 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
                   if (getFeatureValue_CACHED_MAY_BE_STALE('tengu_bridge_system_init', false)) {
                     void (async () => {
                       try {
+                        const { getSlashCommandToolSkills } = await import(
+                          '../commands.js'
+                        );
                         const skills = await getSlashCommandToolSkills(getCwd());
                         if (cancelled) return;
                         const state_0 = store.getState();

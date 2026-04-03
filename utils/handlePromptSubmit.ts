@@ -1,7 +1,6 @@
 import type { UUID } from 'crypto'
 import { logEvent } from 'src/services/analytics/index.js'
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 'src/services/analytics/metadata.js'
-import { type Command, getCommandName, isCommandEnabled } from '../commands.js'
 import { selectableUserMessagesFilter } from '../components/MessageSelector.js'
 import type { SpinnerMode } from '../components/Spinner/types.js'
 import type { QuerySource } from '../constants/querySource.js'
@@ -10,7 +9,8 @@ import type { CanUseToolFn } from '../hooks/useCanUseTool.js'
 import type { IDESelection } from '../hooks/useIdeSelection.js'
 import type { AppState } from '../state/AppState.js'
 import type { SetToolJSXFn } from '../Tool.js'
-import type { LocalJSXCommandOnDone } from '../types/command.js'
+import type { Command, LocalJSXCommandOnDone } from '../types/command.js'
+import { getCommandName, isCommandEnabled } from '../types/command.js'
 import type { Message } from '../types/message.js'
 import {
   isValidImagePaste,

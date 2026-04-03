@@ -1,4 +1,3 @@
-import { getSkillToolCommands } from '../../commands.js'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED,
@@ -14,6 +13,7 @@ export async function logSkillsLoaded(
   cwd: string,
   contextWindowTokens: number,
 ): Promise<void> {
+  const { getSkillToolCommands } = await import('../../commands.js')
   const skills = await getSkillToolCommands(cwd)
   const skillBudget = getCharBudget(contextWindowTokens)
 

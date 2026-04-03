@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "claude-local": "scripts/claude-local.mjs"
+    "codeus": "scripts/codeus.mjs"
   },
   "scripts": {
     "cli": "bun entrypoints/cli.tsx",
@@ -68,6 +68,7 @@
     "supports-hyperlinks": "*",
     "tree-kill": "*",
     "type-fest": "*",
+    "typescript": "^6.0.2",
     "undici": "*",
     "usehooks-ts": "*",
     "vscode-jsonrpc": "*",

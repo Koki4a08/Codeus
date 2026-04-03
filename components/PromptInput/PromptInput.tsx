@@ -17,7 +17,8 @@ import { findBuddyTriggerPositions, useBuddyNotification } from '../../buddy/use
 import { FastModePicker } from '../../commands/fast/fast.js';
 import { isUltrareviewEnabled } from '../../commands/review/ultrareviewEnabled.js';
 import { getNativeCSIuTerminalDisplayName } from '../../commands/terminalSetup/terminalSetup.js';
-import { type Command, hasCommand } from '../../commands.js';
+import type { Command } from '../../types/command.js';
+import { hasCommand } from '../../types/command.js';
 import { useIsModalOverlayActive } from '../../context/overlayContext.js';
 import { useSetPromptOverlayDialog } from '../../context/promptOverlayContext.js';
 import { formatImageRef, formatPastedTextRef, getPastedTextRefNumLines, parseReferences } from '../../history.js';
@@ -71,6 +72,7 @@ import type { ImageDimensions } from '../../utils/imageResizer.js';
 import { cacheImagePath, storeImage } from '../../utils/imageStore.js';
 import { isMacosOptionChar, MACOS_OPTION_SPECIAL_CHARS } from '../../utils/keyboardShortcuts.js';
 import { logError } from '../../utils/log.js';
+import { isDebugPermissionModeEnabled } from '../../utils/isDebugPermissionModeEnabled.js';
 import { isOpus1mMergeEnabled, modelDisplayString } from '../../utils/model/model.js';
 import { setAutoModeActive } from '../../utils/permissions/autoModeState.js';
 import { cyclePermissionMode, getNextPermissionMode } from '../../utils/permissions/getNextPermissionMode.js';
@@ -1528,6 +1530,23 @@ function PromptInput({
         ...current,
         lastPlanModeUse: Date.now()
       }));
+    }
+
+    // Track debug mode activation/deactivation
+    if (isDebugPermissionModeEnabled()) {
+      if (nextMode === 'debug' && toolPermissionContext.mode !== 'debug') {
+        addNotification({
+          key: 'debug-mode-entered',
+          text: 'Debug mode on — instrument first, then fix.',
+          timeout: 2000,
+        });
+      } else if (toolPermissionContext.mode === 'debug' && nextMode !== 'debug') {
+        addNotification({
+          key: 'debug-mode-exited',
+          text: 'Debug mode off.',
+          timeout: 2000,
+        });
+      }
     }
 
     // Set the mode via setAppState directly because setToolPermissionContext

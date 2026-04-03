@@ -78,7 +78,7 @@ export function ThemeProvider({
       };
     }
   }, [activeSetting, internal_querier]);
-  const currentTheme: ThemeName = activeSetting === 'auto' ? systemTheme : activeSetting;
+  const currentTheme: ThemeName = activeSetting === 'auto' ? systemTheme : (activeSetting ?? DEFAULT_THEME);
   const value = useMemo<ThemeContextValue>(() => ({
     themeSetting,
     setThemeSetting: (newSetting: ThemeSetting) => {

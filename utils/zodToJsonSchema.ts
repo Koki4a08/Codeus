@@ -15,6 +15,12 @@ const cache = new WeakMap<ZodTypeAny, JsonSchema7Type>()
  * Converts a Zod v4 schema to JSON Schema format.
  */
 export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema7Type {
+  if (!schema) {
+    // Defensive guard: return a permissive object schema if the Zod schema is
+    // undefined. This can happen with MCP tools whose server omits inputSchema
+    // and whose base MCPTool inputSchema was lost during object construction.
+    return { type: 'object' as const } as JsonSchema7Type
+  }
   const hit = cache.get(schema)
   if (hit) return hit
   const result = toJSONSchema(schema) as JsonSchema7Type

@@ -153,7 +153,11 @@ export async function toolToAPISchema(
   if (!base) {
     const strictToolsEnabled =
       checkStatsigFeatureGate_CACHED_MAY_BE_STALE('tengu_tool_pear')
-    // Use tool's JSON schema directly if provided, otherwise convert Zod schema
+    // Use tool's JSON schema directly if provided, otherwise convert Zod schema.
+    // Guard: MCP tools set inputJSONSchema from the protocol response, which can
+    // be undefined when the server omits inputSchema. In that case, fall through
+    // to zodToJsonSchema with the base MCPTool Zod schema. If that is also
+    // missing, zodToJsonSchema returns a permissive { type: 'object' } fallback.
     let input_schema = (
       'inputJSONSchema' in tool && tool.inputJSONSchema
         ? tool.inputJSONSchema

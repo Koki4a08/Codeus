@@ -6,7 +6,7 @@ import {
   SUPPORTED_SETTINGS,
 } from './supportedSettings.js'
 
-export const DESCRIPTION = 'Get or set Claude Code configuration settings.'
+export const DESCRIPTION = 'Get or set Codeus configuration settings.'
 
 /**
  * Generate the prompt documentation from the registry
